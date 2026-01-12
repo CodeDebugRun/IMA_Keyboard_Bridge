@@ -5,7 +5,10 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 
 import java.io.*;
@@ -36,12 +39,9 @@ public class ImaKeyboardBridgeApp extends Application {
     //Global keyboard hook
     private GlobalKeyboardHook keyboardHook;
 
-    //Configuration
-    private static final String SERVER_HOST = "localhost";
-    private static final int SERVER_PORT = 4000;
-    private static final int API_PORT = 8080;
+    //Configuration (loaded from config.properties)
+    private final AppConfig config = AppConfig.getInstance();
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
-    private static final String EXPORT_FOLDER = "C:\\DOCUMENTS\\Exported_ZPL_Etiketten_Code";
     private static final DateTimeFormatter FILE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     @Override
@@ -137,6 +137,7 @@ public class ImaKeyboardBridgeApp extends Application {
         stage.setTitle("IMA Tastaturbrücke");
         stage.setScene(scene);
         stage.setAlwaysOnTop(true);
+        stage.getIcons().add(createAppIcon());
         stage.show();
 
         // Start global keyboard hook
@@ -150,7 +151,50 @@ public class ImaKeyboardBridgeApp extends Application {
         });
 
         log("Application started");
+        log("Config: " + config.getSummary());
         log("Global keyboard hook active");
+    }
+
+    /**
+     * Creates a programmatic app icon (blue square with white "I" letter).
+     * Simple pixel-based approach that works before stage is shown.
+     */
+    private Image createAppIcon() {
+        int size = 32;
+        WritableImage image = new WritableImage(size, size);
+        var writer = image.getPixelWriter();
+
+        Color blue = Color.web("#1976D2");
+        Color white = Color.WHITE;
+
+        // Fill blue background
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                writer.setColor(x, y, blue);
+            }
+        }
+
+        // Draw white "I" letter (simple block style)
+        // Top bar
+        for (int x = 8; x < 24; x++) {
+            for (int y = 6; y < 10; y++) {
+                writer.setColor(x, y, white);
+            }
+        }
+        // Vertical bar
+        for (int x = 13; x < 19; x++) {
+            for (int y = 10; y < 22; y++) {
+                writer.setColor(x, y, white);
+            }
+        }
+        // Bottom bar
+        for (int x = 8; x < 24; x++) {
+            for (int y = 22; y < 26; y++) {
+                writer.setColor(x, y, white);
+            }
+        }
+
+        return image;
     }
 
     /**
@@ -187,7 +231,7 @@ public class ImaKeyboardBridgeApp extends Application {
      */
     private void sendBarcodeToSocket(String barcode) {
         new Thread(() -> {
-            try (Socket socket = new Socket(SERVER_HOST, SERVER_PORT);
+            try (Socket socket = new Socket(config.getServerHost(), config.getServerPort());
                  PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
                  BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
@@ -281,7 +325,7 @@ public class ImaKeyboardBridgeApp extends Application {
 
         new Thread(() -> {
             try {
-                String url = String.format("http://%s:%d%s", SERVER_HOST, API_PORT, endpoint);
+                String url = String.format("http://%s:%d%s", config.getServerHost(), config.getApiPort(), endpoint);
                 java.net.URL apiUrl = new java.net.URL(url);
                 java.net.HttpURLConnection conn = (java.net.HttpURLConnection) apiUrl.openConnection();
                 conn.setRequestMethod("GET");
@@ -338,7 +382,7 @@ public class ImaKeyboardBridgeApp extends Application {
     private String saveExportToFile(String content, String format) {
         try {
             // Create export folder if not exists
-            Path exportDir = Paths.get(EXPORT_FOLDER);
+            Path exportDir = Paths.get(config.getExportFolder());
             if (!Files.exists(exportDir)) {
                 Files.createDirectories(exportDir);
             }
