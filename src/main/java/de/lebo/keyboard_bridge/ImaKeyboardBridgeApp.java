@@ -10,6 +10,9 @@ import javafx.stage.Stage;
 
 import java.io.*;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -38,6 +41,8 @@ public class ImaKeyboardBridgeApp extends Application {
     private static final int SERVER_PORT = 4000;
     private static final int API_PORT = 8080;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final String EXPORT_FOLDER = "C:\\DOCUMENTS\\Exported_ZPL_Etiketten_Code";
+    private static final DateTimeFormatter FILE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     @Override
     public void start (Stage stage) {
@@ -119,15 +124,16 @@ public class ImaKeyboardBridgeApp extends Application {
         VBox logSection = createSection("Log");
         logArea = new TextArea();
         logArea.setEditable(false);
-        logArea.setPrefRowCount(6);
-        logArea.setStyle("-fx-font-family: monospace;");
+        logArea.setPrefRowCount(12);
+        logArea.setMinHeight(150);
+        logArea.setStyle("-fx-font-family: monospace; -fx-font-size: 12px;");
         VBox.setVgrow(logArea, Priority.ALWAYS);
         ((VBox) logSection).getChildren().add(logArea);
 
         root.getChildren().addAll(titleLabel, statusBar, barcodeSection, auftragSection, rangeSection, logSection);
         VBox.setVgrow(logSection, Priority.ALWAYS);
 
-        Scene scene = new Scene(root, 480, 580);
+        Scene scene = new Scene(root, 520, 680);
         stage.setTitle("IMA Tastaturbrücke");
         stage.setScene(scene);
         stage.setAlwaysOnTop(true);
@@ -268,9 +274,11 @@ public class ImaKeyboardBridgeApp extends Application {
     }
 
     /**
-     * Calls the API endpoint and handles response.
+     * Calls the API endpoint, reads response and saves to file.
      */
     private void callApiEndpoint(String endpoint) {
+        String format = endpoint.contains("/json") ? "json" : "csv";
+
         new Thread(() -> {
             try {
                 String url = String.format("http://%s:%d%s", SERVER_HOST, API_PORT, endpoint);
@@ -280,18 +288,39 @@ public class ImaKeyboardBridgeApp extends Application {
 
                 int responseCode = conn.getResponseCode();
 
-                Platform.runLater(() -> {
-                    if (responseCode == 200) {
-                        log("OK - Export successful");
-                        setStatus("Export OK", "green");
-                    } else if (responseCode == 404) {
-                        log("ERROR - Data not found (404)");
-                        setStatus("Nicht gefunden", "orange");
-                    } else {
-                        log("ERROR - API error: " + responseCode);
-                        setStatus("API Fehler", "red");
+                if (responseCode == 200) {
+                    // Read response body
+                    StringBuilder content = new StringBuilder();
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            content.append(line).append("\n");
+                        }
                     }
-                });
+
+                    // Save to file
+                    String savedPath = saveExportToFile(content.toString(), format);
+
+                    Platform.runLater(() -> {
+                        if (savedPath != null) {
+                            log("OK - Saved: " + savedPath);
+                            setStatus("Export OK", "green");
+                        } else {
+                            log("ERROR - Could not save file");
+                            setStatus("Speicherfehler", "red");
+                        }
+                    });
+                } else {
+                    Platform.runLater(() -> {
+                        if (responseCode == 404) {
+                            log("ERROR - Data not found (404)");
+                            setStatus("Nicht gefunden", "orange");
+                        } else {
+                            log("ERROR - API error: " + responseCode);
+                            setStatus("API Fehler", "red");
+                        }
+                    });
+                }
 
             } catch (Exception e) {
                 Platform.runLater(() -> {
@@ -300,6 +329,33 @@ public class ImaKeyboardBridgeApp extends Application {
                 });
             }
         }).start();
+    }
+
+    /**
+     * Saves export content to file in EXPORT_FOLDER.
+     * Creates folder if it doesn't exist.
+     */
+    private String saveExportToFile(String content, String format) {
+        try {
+            // Create export folder if not exists
+            Path exportDir = Paths.get(EXPORT_FOLDER);
+            if (!Files.exists(exportDir)) {
+                Files.createDirectories(exportDir);
+            }
+
+            // Generate filename with timestamp
+            String timestamp = LocalDateTime.now().format(FILE_TIME_FORMAT);
+            String extension = format.equals("json") ? ".json" : ".csv";
+            String filename = "export_" + timestamp + extension;
+
+            // Write file
+            Path filePath = exportDir.resolve(filename);
+            Files.writeString(filePath, content);
+
+            return filePath.toString();
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /**
