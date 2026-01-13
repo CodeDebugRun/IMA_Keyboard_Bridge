@@ -274,9 +274,14 @@ public class ImaKeyboardBridgeApp extends Application {
 
         String endpoint;
         if (!position.isEmpty()) {
-            // Auftrag + Position -> always CSV
-            endpoint = String.format("/api/export/auftrag/%s/pos/%s", auftrag, position);
-            log("Exporting: Auftrag=" + auftrag + ", Position=" + position + " [CSV]");
+            // Auftrag + Position
+            if (format.equals("json")) {
+                endpoint = String.format("/api/export/auftrag/%s/pos/%s/json", auftrag, position);
+                log("Exporting: Auftrag=" + auftrag + ", Position=" + position + " [JSON]");
+            } else {
+                endpoint = String.format("/api/export/auftrag/%s/pos/%s", auftrag, position);
+                log("Exporting: Auftrag=" + auftrag + ", Position=" + position + " [CSV]");
+            }
         } else if (format.equals("json")) {
             // Auftrag only -> JSON
             endpoint = String.format("/api/export/auftrag/%s/json", auftrag);
