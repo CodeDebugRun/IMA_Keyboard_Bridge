@@ -140,6 +140,24 @@ public class ImaKeyboardBridgeApp extends Application {
         stage.getIcons().add(createAppIcon());
         stage.show();
 
+        // Remove focus from all text fields at startup
+        // This prevents barcode scanner input from going into text fields
+        root.requestFocus();
+
+        // ESC key removes focus from text fields
+        scene.setOnKeyPressed(event -> {
+            if (event.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+                root.requestFocus();
+            }
+        });
+
+        // Clicking on empty area (gray background) removes focus
+        root.setOnMouseClicked(event -> {
+            if (event.getTarget() == root) {
+                root.requestFocus();
+            }
+        });
+
         // Start global keyboard hook
         startGlobalHook();
 
